@@ -1,10 +1,12 @@
 {
   "builds": [
-    { "src": "api/extract.py", "use": "@vercel/python" },
+    { "src": "api/extract.py",  "use": "@vercel/python" },
+    { "src": "api/invoices.py", "use": "@vercel/python" },
     { "src": "public/index.html", "use": "@vercel/static" }
   ],
   "routes": [
-    { "src": "/api/extract", "dest": "/api/extract.py" },
+    { "src": "/api/extract",  "dest": "/api/extract.py" },
+    { "src": "/api/invoices", "dest": "/api/invoices.py" },
     { "src": "/(.*)", "dest": "/public/index.html" }
   ]
 }

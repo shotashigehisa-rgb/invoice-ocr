@@ -3,6 +3,7 @@ import base64
 import json
 import os
 from http.server import BaseHTTPRequestHandler
+from supabase import create_client
 
 
 class handler(BaseHTTPRequestHandler):
@@ -24,6 +25,7 @@ class handler(BaseHTTPRequestHandler):
                 return
 
             result = extract_invoice_info(image_b64)
+            save_to_supabase(result)
             self._send_json(result)
 
         except Exception as e:
@@ -81,3 +83,15 @@ def extract_invoice_info(image_b64: str) -> dict:
     start = text.find("{")
     end = text.rfind("}") + 1
     return json.loads(text[start:end])
+
+
+def save_to_supabase(result: dict):
+    client = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_KEY"],
+    )
+    client.table("invoices").insert({
+        "recipient": result.get("宛名"),
+        "date":      result.get("日付"),
+        "amount":    result.get("金額"),
+    }).execute()

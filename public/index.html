@@ -10,9 +10,11 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: #f5f5f5;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
+      align-items: center;
       padding: 40px 16px;
       min-height: 100vh;
+      gap: 24px;
     }
     .card {
       background: #fff;
@@ -21,9 +23,9 @@
       padding: 32px;
       width: 100%;
       max-width: 480px;
-      height: fit-content;
     }
     h1 { font-size: 1.4rem; margin-bottom: 24px; color: #111; }
+    h2 { font-size: 1rem; margin-bottom: 12px; color: #333; }
     .drop-area {
       border: 2px dashed #ccc;
       border-radius: 8px;
@@ -43,7 +45,7 @@
       object-fit: contain;
       max-height: 240px;
     }
-    button {
+    .btn {
       margin-top: 16px;
       width: 100%;
       padding: 12px;
@@ -55,12 +57,8 @@
       cursor: pointer;
       display: none;
     }
-    button:disabled { background: #aaa; cursor: default; }
-    .result {
-      margin-top: 24px;
-      display: none;
-    }
-    .result h2 { font-size: 1rem; margin-bottom: 12px; color: #333; }
+    .btn:disabled { background: #aaa; cursor: default; }
+    .result { margin-top: 24px; display: none; }
     .field {
       display: flex;
       justify-content: space-between;
@@ -83,9 +81,40 @@
       margin-right: 6px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 履歴テーブル */
+    .history-card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 32px;
+      width: 100%;
+      max-width: 720px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+    }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      background: #f5f5f5;
+      color: #555;
+      font-weight: 600;
+    }
+    td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      color: #111;
+    }
+    tr:last-child td { border-bottom: none; }
+    .empty { color: #999; font-size: 0.9rem; padding: 16px 0; }
   </style>
 </head>
 <body>
+
+<!-- アップロードカード -->
 <div class="card">
   <h1>請求書OCR</h1>
 
@@ -95,7 +124,7 @@
   </div>
 
   <img id="preview" alt="プレビュー">
-  <button id="btn" onclick="extract()">読み取る</button>
+  <button class="btn" id="btn" onclick="extract()">読み取る</button>
 
   <div class="result" id="result">
     <h2>抽出結果</h2>
@@ -104,6 +133,24 @@
     <div class="field"><span class="label">金額</span><span class="value" id="r-amount">-</span></div>
   </div>
   <div class="error" id="error"></div>
+</div>
+
+<!-- 履歴カード -->
+<div class="history-card">
+  <h2>保存済み履歴</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>日時</th>
+        <th>宛名</th>
+        <th>日付</th>
+        <th>金額</th>
+      </tr>
+    </thead>
+    <tbody id="history-body">
+      <tr><td colspan="4" class="empty">読み込み中…</td></tr>
+    </tbody>
+  </table>
 </div>
 
 <script>
@@ -116,7 +163,6 @@
 
   dropArea.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
-
   dropArea.addEventListener("dragover", e => { e.preventDefault(); dropArea.classList.add("drag-over"); });
   dropArea.addEventListener("dragleave", () => dropArea.classList.remove("drag-over"));
   dropArea.addEventListener("drop", e => {
@@ -128,8 +174,7 @@
   function handleFile(file) {
     if (!file) return;
     selectedFile = file;
-    const url = URL.createObjectURL(file);
-    preview.src = url;
+    preview.src = URL.createObjectURL(file);
     preview.style.display = "block";
     btn.style.display = "block";
     document.getElementById("result").style.display = "none";
@@ -156,11 +201,35 @@
       document.getElementById("r-date").textContent   = data["日付"]  || "-";
       document.getElementById("r-amount").textContent = data["金額"]  || "-";
       document.getElementById("result").style.display = "block";
+
+      loadHistory(); // 保存後に履歴を更新
     } catch (e) {
       document.getElementById("error").textContent = "エラー: " + e.message;
     } finally {
       btn.disabled = false;
       btn.innerHTML = "読み取る";
+    }
+  }
+
+  async function loadHistory() {
+    const tbody = document.getElementById("history-body");
+    try {
+      const res = await fetch("/api/invoices");
+      const rows = await res.json();
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="empty">データがありません</td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td>${new Date(r.created_at).toLocaleString("ja-JP")}</td>
+          <td>${r.recipient || "-"}</td>
+          <td>${r.date      || "-"}</td>
+          <td>${r.amount    || "-"}</td>
+        </tr>
+      `).join("");
+    } catch {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">履歴の取得に失敗しました</td></tr>';
     }
   }
 
@@ -172,6 +241,8 @@
       reader.readAsDataURL(file);
     });
   }
+
+  loadHistory();
 </script>
 </body>
 </html>
