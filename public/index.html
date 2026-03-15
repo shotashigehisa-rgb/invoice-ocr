@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>請求書OCR</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f5f5f5;
+      display: flex;
+      justify-content: center;
+      padding: 40px 16px;
+      min-height: 100vh;
+    }
+    .card {
+      background: #fff;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.1);
+      padding: 32px;
+      width: 100%;
+      max-width: 480px;
+      height: fit-content;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 24px; color: #111; }
+    .drop-area {
+      border: 2px dashed #ccc;
+      border-radius: 8px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.2s;
+      color: #666;
+    }
+    .drop-area:hover, .drop-area.drag-over { border-color: #0070f3; color: #0070f3; }
+    .drop-area input { display: none; }
+    #preview {
+      margin-top: 16px;
+      border-radius: 8px;
+      width: 100%;
+      display: none;
+      object-fit: contain;
+      max-height: 240px;
+    }
+    button {
+      margin-top: 16px;
+      width: 100%;
+      padding: 12px;
+      background: #0070f3;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      display: none;
+    }
+    button:disabled { background: #aaa; cursor: default; }
+    .result {
+      margin-top: 24px;
+      display: none;
+    }
+    .result h2 { font-size: 1rem; margin-bottom: 12px; color: #333; }
+    .field {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee;
+      font-size: 0.95rem;
+    }
+    .field:last-child { border-bottom: none; }
+    .label { color: #666; }
+    .value { font-weight: 600; color: #111; }
+    .error { color: #e00; margin-top: 12px; font-size: 0.9rem; }
+    .spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2px solid #fff;
+      border-top-color: transparent;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>請求書OCR</h1>
+
+  <div class="drop-area" id="dropArea">
+    <input type="file" id="fileInput" accept="image/jpeg,image/jpg">
+    <p>クリックまたはJPGをドロップ</p>
+  </div>
+
+  <img id="preview" alt="プレビュー">
+  <button id="btn" onclick="extract()">読み取る</button>
+
+  <div class="result" id="result">
+    <h2>抽出結果</h2>
+    <div class="field"><span class="label">宛名</span><span class="value" id="r-name">-</span></div>
+    <div class="field"><span class="label">日付</span><span class="value" id="r-date">-</span></div>
+    <div class="field"><span class="label">金額</span><span class="value" id="r-amount">-</span></div>
+  </div>
+  <div class="error" id="error"></div>
+</div>
+
+<script>
+  let selectedFile = null;
+
+  const dropArea = document.getElementById("dropArea");
+  const fileInput = document.getElementById("fileInput");
+  const preview  = document.getElementById("preview");
+  const btn      = document.getElementById("btn");
+
+  dropArea.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", e => handleFile(e.target.files[0]));
+
+  dropArea.addEventListener("dragover", e => { e.preventDefault(); dropArea.classList.add("drag-over"); });
+  dropArea.addEventListener("dragleave", () => dropArea.classList.remove("drag-over"));
+  dropArea.addEventListener("drop", e => {
+    e.preventDefault();
+    dropArea.classList.remove("drag-over");
+    handleFile(e.dataTransfer.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file) return;
+    selectedFile = file;
+    const url = URL.createObjectURL(file);
+    preview.src = url;
+    preview.style.display = "block";
+    btn.style.display = "block";
+    document.getElementById("result").style.display = "none";
+    document.getElementById("error").textContent = "";
+  }
+
+  async function extract() {
+    if (!selectedFile) return;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>読み取り中…';
+    document.getElementById("error").textContent = "";
+
+    try {
+      const b64 = await toBase64(selectedFile);
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image: b64 }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      document.getElementById("r-name").textContent   = data["宛名"]  || "-";
+      document.getElementById("r-date").textContent   = data["日付"]  || "-";
+      document.getElementById("r-amount").textContent = data["金額"]  || "-";
+      document.getElementById("result").style.display = "block";
+    } catch (e) {
+      document.getElementById("error").textContent = "エラー: " + e.message;
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = "読み取る";
+    }
+  }
+
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(",")[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+</script>
+</body>
+</html>

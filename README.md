@@ -46,6 +46,14 @@ python invoice_ocr.py 請求書.jpg
 }
 ```
 
+## Vercelへのデプロイ
+
+1. [Vercel](https://vercel.com/) にGitHubアカウントでログイン
+2. `invoice-ocr` リポジトリをインポート
+3. **Environment Variables** に以下を追加：
+   - `ANTHROPIC_API_KEY` = `sk-ant-xxxx...`
+4. Deploy ボタンを押すだけ
+
 ## 必要なもの
 
 - Python 3.8+
